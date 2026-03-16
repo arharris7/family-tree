@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harris Family Tree Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f1f5f9; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }
+        canvas { cursor: grab; background-color: #ffffff; }
+        canvas:active { cursor: grabbing; }
+        .controls { position: fixed; top: 20px; left: 20px; z-index: 10; display: flex; gap: 10px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <div class="controls bg-white/90 backdrop-blur p-3 rounded-xl shadow-xl border border-slate-200">
+        <button id="zoomIn" class="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold">+</button>
+        <button id="zoomOut" class="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold">-</button>
+        <button id="resetView" class="px-4 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm font-medium">Reset View</button>
+        <div class="h-6 w-px bg-slate-300 mx-1"></div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-500 flex items-center font-bold">Drag to pan • Scroll to zoom</p>
+    </div>
+
+    <div id="canvasContainer" class="flex-grow w-full h-full relative overflow-hidden">
+        <canvas id="treeCanvas"></canvas>
+    </div>
+
+    <script>
+        const familyData = {
+            nodes: [
+                // Gen 1
+                { id: "root_m", name: "William Harris", dob: "???", dod: "1774", isLiving: false },
+                { id: "root_f", name: "Rebekkah Arret", dob: "1733", dod: "1797", isLiving: false },
+                
+                // Gen 2
+                { id: "g2_1m", name: "Richard Harris", dob: "1766", dod: "1844", isLiving: false, parents: ["root_m", "root_f"] },
+                { id: "g2_1f1", name: "Anne Rakestraw", dob: "1766", dod: "1799", isLiving: false },
+                { id: "g2_1f2", name: "Sarah Howard", dob: "1777", dod: "1835", isLiving: false },
+                { id: "g2_2", name: "George Harris", dob: "1761", dod: "???", isLiving: false, parents: ["root_m", "root_f"] },
+
+                // Gen 3
+                { id: "rh_c1", name: "Sarah Harris", dob: "1798", dod: "1798", isLiving: false, parents: ["g2_1m", "g2_1f1"] },
+                { id: "rh_c2", name: "Anne Harris", dob: "1799", dod: "1799", isLiving: false, parents: ["g2_1m", "g2_1f1"] },
+                { id: "th_m", name: "Thomas Harris", dob: "1801", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "th_f", name: "Jane Wix", dob: "1811", isLiving: false },
+                { id: "gh_c2", name: "Mary Anne Harris", dob: "1801", dod: "1807", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c3", name: "Sarah Harris", dob: "1802", dod: "1802", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c4m", name: "James Harris", dob: "1805", dod: "1889", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c4f", name: "Frances Dean", dob: "1817", dod: "1885", isLiving: false },
+                { id: "gh_c5m", name: "Samuel Harris", dob: "1810", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c5f", name: "Mary Ann Frith", isLiving: false },
+                { id: "gh_c6", name: "Mary Harris", dob: "1812", dod: "1819", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c7", name: "Martha Harris", dob: "1814", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c8", name: "Henry Harris", dob: "1810", dod: "1810", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+                { id: "gh_c9", name: "Richard Harris", dob: "1819", isLiving: false, parents: ["g2_1m", "g2_1f2"] },
+
+                // Gen 4
+                { id: "gh_pb_m", name: "George Harris", dob: "1840", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "gh_pb_f", name: "Phoebe Blackstone", dob: "1849", isLiving: false },
+                { id: "th_c2", name: "Henry Harris", dob: "1834", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c3", name: "William Harris", dob: "1836", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c4", name: "Mary Ann Harris", dob: "1838", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c5", name: "Martha Harris", dob: "1841", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c6", name: "Elizabeth Harris", dob: "1843", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c7", name: "James Harris", dob: "1846", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c8", name: "Charles Harris", dob: "1851", isLiving: false, parents: ["th_m", "th_f"] },
+                { id: "th_c9", name: "Emily Harris", dob: "1853", isLiving: false, parents: ["th_m", "th_f"] },
+
+                // Gen 5
+                { id: "jth_ew_m", name: "James Thomas Harris", dob: "1881", dod: "1940", isLiving: false, parents: ["gh_pb_m", "gh_pb_f"] },
+                { id: "jth_ew_f", name: "Ellen Whittaker", dob: "1877", dod: "1944", isLiving: false },
+                { id: "gp_c2", name: "George Harris", dob: "1874", isLiving: false, parents: ["gh_pb_m", "gh_pb_f"] },
+                { id: "gp_c3", name: "Albert Harris", dob: "1877", isLiving: false, parents: ["gh_pb_m", "gh_pb_f"] },
+                { id: "gp_c4", name: "Clara Harris", dob: "1879", isLiving: false, parents: ["gh_pb_m", "gh_pb_f"] },
+                { id: "gp_c5", name: "Maud Harris", dob: "1886", isLiving: false, parents: ["gh_pb_m", "gh_pb_f"] },
+
+                // Gen 6
+                { id: "jth_aw_m", name: "James Thomas Harris", dob: "1911", dod: "1959", isLiving: false, parents: ["jth_ew_m", "jth_ew_f"] },
+                { id: "jth_aw_f", name: "Alice Eva Emma Waller", dob: "1912", dod: "1998", isLiving: false },
+
+                // Gen 7
+                { id: "jth_cb_m", name: "James Thomas Harris", dob: "1933", isLiving: true, parents: ["jth_aw_m", "jth_aw_f"] },
+                { id: "jth_cb_f1", name: "Catherine Ann Birkett", dob: "1936", dod: "1994", isLiving: false },
+                { id: "jth_cb_f2", name: "Janet Doreen Hayes", dob: "1944", isLiving: true },
+                { id: "rgh_bw_m", name: "Robert George Harris", dob: "1934", dod: "1981", isLiving: false, parents: ["jth_aw_m", "jth_aw_f"] },
+                { id: "rgh_bw_f1", name: "Betty Wales", dob: "1937", dod: "2026", isLiving: false },
+                { id: "rgh_bw_m2", name: "Clive Bruce David Firmager", dob: "1933", dod: "2025", isLiving: false },
+
+                // Gen 8
+                { id: "cp_se_f", name: "Catherine Paula Harris", dob: "1959", isLiving: true, parents: ["jth_cb_m", "jth_cb_f1"] },
+                { id: "cp_se_m", name: "Stephen Robert Everitt", dob: "1958", isLiving: true },
+                { id: "tm_ks_f", name: "Teresa Mary Harris", dob: "1961", isLiving: true, parents: ["jth_cb_m", "jth_cb_f1"] },
+                { id: "tm_ks_m", name: "Karl Alex Sykes Gambrell", dob: "1963", isLiving: true },
+                { id: "sp_ds_f", name: "Suzanne Patricia Harris", dob: "1962", isLiving: true, parents: ["jth_cb_m", "jth_cb_f1"] },
+                { id: "sp_ds_m", name: "David Ivan Stanford", dob: "1958", isLiving: true },
+                { id: "ij_ua_m", name: "Ian James Harris", dob: "1965", isLiving: true, parents: ["jth_cb_m", "jth_cb_f1"] },
+                { id: "ij_ua_f", name: "Ulrika Andersson", isLiving: true },
+                { id: "ch_da_f", name: "Claire Harris", dob: "1968", isLiving: true, parents: ["jth_cb_m", "jth_cb_f1"] },
+                { id: "ch_da_m", name: "David Archer", isLiving: true },
+                { id: "ch_aw_m", name: "Christopher Harris", dob: "1958", isLiving: true, parents: ["rgh_bw_m", "rgh_bw_f1"] },
+                { id: "ch_aw_f", name: "Adrienne Woods", dob: "1957", isLiving: true },
+                { id: "linda_h", name: "Linda Harris", dob: "1961", isLiving: true, parents: ["rgh_bw_m", "rgh_bw_f1"] },
+                { id: "angela_h", name: "Angela Harris", dob: "1964", isLiving: true, parents: ["rgh_bw_m", "rgh_bw_f1"] },
+                { id: "sue_w", name: "Sue Winters", isLiving: true },
+                { id: "michael_h", name: "Michael Harris", dob: "1966", isLiving: true, parents: ["rgh_bw_m", "rgh_bw_f1"] },
+                { id: "kay_h", name: "Kay", dob: "1971", isLiving: true },
+
+                // Gen 9
+                { id: "jaimee_e", name: "Jaimee Ann Everitt", dob: "1987", isLiving: true, parents: ["cp_se_m", "cp_se_f"] },
+                { id: "georgia_e", name: "Georgia Rose Everitt", dob: "1992", isLiving: true, parents: ["cp_se_m", "cp_se_f"] },
+                { id: "liam_e", name: "Liam Everitt", dob: "1999", isLiving: true, parents: ["cp_se_m", "cp_se_f"] },
+                { id: "alex_sg", name: "Alexandra Sykes Gambrell", dob: "1993", isLiving: true, parents: ["tm_ks_m", "tm_ks_f"] },
+                { id: "jacob_g", name: "Jacob Gambrell", dob: "2002", isLiving: true, parents: ["tm_ks_m", "tm_ks_f"] },
+                { id: "kathy_s", name: "Katherine Elizabeth Stanford", dob: "1991", isLiving: true, parents: ["sp_ds_m", "sp_ds_f"] },
+                { id: "rob_s", name: "Robert Ivan Stanford", dob: "1994", isLiving: true, parents: ["sp_ds_m", "sp_ds_f"] },
+                { id: "grace_ha", name: "Grace Vandela Harris-Andersson", dob: "1999", isLiving: true, parents: ["ij_ua_m", "ij_ua_f"] },
+                { id: "lydia_ha", name: "Lydia Harris-Andersson", dob: "2001", isLiving: true, parents: ["ij_ua_m", "ij_ua_f"] },
+                { id: "kit_h", name: "Kit Anthony Harris", dob: "1993", isLiving: true, parents: ["ch_aw_m", "ch_aw_f"] },
+                { id: "alicia_h", name: "Alicia Rose Harris", dob: "1997", isLiving: true, parents: ["ch_aw_m", "ch_aw_f"] },
+                { id: "daniel_h", name: "Daniel", dob: "1983", isLiving: true, parents: ["michael_h", "kay_h"] },
+                { id: "char_h", name: "Charlotte", dob: "1985", isLiving: true, parents: ["angela_h", "sue_w"] },
+                { id: "ian_x", name: "Ian", isLiving: true },
+                { id: "mark_h", name: "Mark Hawkins", isLiving: true },
+                
+                // Gen 10
+                { id: "euan_x", name: "Euan", isLiving: true, parents: ["char_h", "ian_x"] }
+            ],
+            marriages: [
+                { id: "m0", partners: ["root_m", "root_f"] },
+                { id: "m1a", partners: ["g2_1m", "g2_1f1"] },
+                { id: "m1b", partners: ["g2_1m", "g2_1f2"] },
+                { id: "m2", partners: ["th_m", "th_f"] },
+                { id: "m3", partners: ["gh_c4m", "gh_c4f"] },
+                { id: "m4", partners: ["gh_c5m", "gh_c5f"] },
+                { id: "m5", partners: ["gh_pb_m", "gh_pb_f"] },
+                { id: "m6", partners: ["jth_ew_m", "jth_ew_f"] },
+                { id: "m7", partners: ["jth_aw_m", "jth_aw_f"] },
+                { id: "m8a", partners: ["jth_cb_m", "jth_cb_f1"] },
+                { id: "m8b", partners: ["jth_cb_m", "jth_cb_f2"] },
+                { id: "m9a", partners: ["rgh_bw_m", "rgh_bw_f1"] },
+                { id: "m9b", partners: ["rgh_bw_f1", "rgh_bw_m2"] },
+                { id: "m10", partners: ["cp_se_m", "cp_se_f"] },
+                { id: "m11", partners: ["tm_ks_m", "tm_ks_f"] },
+                { id: "m12", partners: ["sp_ds_m", "sp_ds_f"] },
+                { id: "m13", partners: ["ij_ua_m", "ij_ua_f"] },
+                { id: "m14", partners: ["ch_da_m", "ch_da_f"] },
+                { id: "m15", partners: ["ch_aw_m", "ch_aw_f"] },
+                { id: "m16", partners: ["angela_h", "sue_w"] },
+                { id: "m17", partners: ["michael_h", "kay_h"] },
+                { id: "m18a", partners: ["char_h", "ian_x"] },
+                { id: "m18b", partners: ["char_h", "mark_h"] }
+            ]
+        };
+
+        const canvas = document.getElementById('treeCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvasContainer');
+
+        let scale = 1;
+        let offset = { x: 0, y: 0 };
+        const nodeWidth = 180;
+        const nodeHeight = 80;
+        const hGap = 60;
+        const vGap = 120;
+
+        function getChildren(partners) {
+            return familyData.nodes.filter(n => 
+                n.parents && partners.every(p => n.parents.includes(p))
+            );
+        }
+
+        function calculateLayout() {
+            // 1. Assign Levels
+            function setLevel(nodeId, level) {
+                const node = familyData.nodes.find(n => n.id === nodeId);
+                if (!node) return;
+                node.level = Math.max(node.level || 0, level);
+                const marriages = familyData.marriages.filter(m => m.partners.includes(nodeId));
+                marriages.forEach(m => {
+                    const partners = m.partners;
+                    partners.forEach(pId => {
+                        const p = familyData.nodes.find(n => n.id === pId);
+                        if (p) p.level = Math.max(p.level || 0, node.level);
+                    });
+                    const children = getChildren(partners);
+                    children.forEach(c => setLevel(c.id, node.level + 1));
+                });
+            }
+
+            const roots = familyData.nodes.filter(n => !n.parents || n.parents.length === 0);
+            roots.forEach(r => setLevel(r.id, 0));
+
+            // 2. Position Nodes recursively
+            const placed = new Set();
+            const levelCursor = {};
+
+            function positionSubtree(nodeId) {
+                if (placed.has(nodeId)) return;
+                const node = familyData.nodes.find(n => n.id === nodeId);
+                
+                // Find all partners for this person
+                const marriages = familyData.marriages.filter(m => m.partners.includes(nodeId));
+                
+                // If there are multiple partners, order them
+                // We want the primary person in the middle for remarriages
+                const others = [];
+                marriages.forEach(m => {
+                    const partnerId = m.partners.find(id => id !== nodeId);
+                    if (partnerId) others.push(partnerId);
+                });
+
+                // partnerList: [Spouse 1, Primary Person, Spouse 2, ...]
+                let partnerList = [];
+                if (others.length === 1) {
+                    partnerList = [nodeId, others[0]];
+                } else if (others.length >= 2) {
+                    partnerList = [others[0], nodeId, ...others.slice(1)];
+                } else {
+                    partnerList = [nodeId];
+                }
+                
+                const allChildren = [];
+                marriages.forEach(m => {
+                    const children = getChildren(m.partners);
+                    allChildren.push(...children);
+                });
+
+                if (allChildren.length > 0) {
+                    allChildren.forEach(c => positionSubtree(c.id));
+                    
+                    const firstChild = allChildren[0];
+                    const lastChild = allChildren[allChildren.length - 1];
+                    const childrenMid = (firstChild.x + lastChild.x + nodeWidth) / 2;
+                    
+                    const blockWidth = partnerList.length * nodeWidth + (partnerList.length - 1) * hGap;
+                    let startX = childrenMid - (blockWidth / 2);
+
+                    // Overlap prevention with previous branches on same level
+                    const minX = (levelCursor[node.level] || 0) + hGap;
+                    if (startX < minX) {
+                        const shift = minX - startX;
+                        // Shift children too
+                        allChildren.forEach(c => shiftSubtree(c.id, shift));
+                        startX = minX;
+                    }
+
+                    partnerList.forEach((pId, i) => {
+                        const p = familyData.nodes.find(n => n.id === pId);
+                        if (p) {
+                            p.x = startX + i * (nodeWidth + hGap);
+                            p.y = p.level * (nodeHeight + vGap);
+                            placed.add(pId);
+                            levelCursor[node.level] = Math.max(levelCursor[node.level] || 0, p.x + nodeWidth);
+                        }
+                    });
+                } else {
+                    // Leaf marriage block
+                    let startX = (levelCursor[node.level] || 0) + hGap;
+                    partnerList.forEach((pId, i) => {
+                        const p = familyData.nodes.find(n => n.id === pId);
+                        if (p) {
+                            p.x = startX + i * (nodeWidth + hGap);
+                            p.y = p.level * (nodeHeight + vGap);
+                            placed.add(pId);
+                            levelCursor[node.level] = p.x + nodeWidth;
+                        }
+                    });
+                }
+            }
+
+            function shiftSubtree(nodeId, amount) {
+                const node = familyData.nodes.find(n => n.id === nodeId);
+                if (!node || !placed.has(nodeId)) return;
+                
+                const marriages = familyData.marriages.filter(m => m.partners.includes(nodeId));
+                const allPartners = new Set([nodeId]);
+                marriages.forEach(m => m.partners.forEach(p => allPartners.add(p)));
+                
+                allPartners.forEach(pId => {
+                    const p = familyData.nodes.find(n => n.id === pId);
+                    if (p) p.x += amount;
+                });
+
+                marriages.forEach(m => {
+                    getChildren(m.partners).forEach(c => shiftSubtree(c.id, amount));
+                });
+            }
+
+            roots.forEach(r => positionSubtree(r.id));
+        }
+
+        function drawTree() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(offset.x, offset.y);
+            ctx.scale(scale, scale);
+
+            // Connect lines
+            familyData.marriages.forEach(m => {
+                const pNodes = m.partners.map(id => familyData.nodes.find(n => n.id === id));
+                if (pNodes.length < 2) return;
+
+                // Sort partners by x-position to ensure line logic works
+                pNodes.sort((a, b) => a.x - b.x);
+
+                // Marriage line
+                ctx.strokeStyle = '#94a3b8';
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(pNodes[0].x + nodeWidth, pNodes[0].y + nodeHeight / 2);
+                ctx.lineTo(pNodes[1].x, pNodes[1].y + nodeHeight / 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Children lines
+                const children = getChildren(m.partners);
+                if (children.length > 0) {
+                    const midX = (pNodes[0].x + nodeWidth + pNodes[1].x) / 2;
+                    const midY = pNodes[0].y + nodeHeight / 2;
+                    const dropY = midY + vGap / 2;
+
+                    ctx.strokeStyle = '#cbd5e1';
+                    ctx.beginPath();
+                    ctx.moveTo(midX, midY);
+                    ctx.lineTo(midX, dropY);
+                    ctx.stroke();
+
+                    children.forEach(c => {
+                        const cx = c.x + nodeWidth / 2;
+                        ctx.beginPath();
+                        ctx.moveTo(midX, dropY);
+                        ctx.lineTo(cx, dropY);
+                        ctx.lineTo(cx, c.y);
+                        ctx.stroke();
+                    });
+                }
+            });
+
+            // Draw Nodes
+            familyData.nodes.forEach(node => {
+                const isLiving = node.isLiving !== false;
+                
+                // Shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.05)';
+                ctx.beginPath();
+                ctx.roundRect(node.x + 3, node.y + 3, nodeWidth, nodeHeight, 8);
+                ctx.fill();
+
+                // Box
+                ctx.fillStyle = isLiving ? '#ffffff' : '#f1f5f9';
+                ctx.strokeStyle = isLiving ? '#3b82f6' : '#94a3b8';
+                ctx.lineWidth = isLiving ? 2 : 1;
+                
+                ctx.beginPath();
+                ctx.roundRect(node.x, node.y, nodeWidth, nodeHeight, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                // Name
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 12px Inter, sans-serif';
+                ctx.fillText(node.name, node.x + nodeWidth/2, node.y + 35);
+
+                // Dates
+                ctx.fillStyle = '#64748b';
+                ctx.font = '500 10px Inter, sans-serif';
+                const dateStr = node.isLiving ? (node.dob ? `Born ${node.dob}` : 'Living') : `${node.dob || '?'} — ${node.dod || '?'}`;
+                ctx.fillText(dateStr, node.x + nodeWidth/2, node.y + 55);
+            });
+
+            ctx.restore();
+        }
+
+        // --- Interaction Logic ---
+        let isDragging = false;
+        let lastMouse = { x: 0, y: 0 };
+        canvas.onmousedown = (e) => { isDragging = true; lastMouse = { x: e.clientX, y: e.clientY }; };
+        window.onmouseup = () => isDragging = false;
+        window.onmousemove = (e) => {
+            if (isDragging) {
+                offset.x += (e.clientX - lastMouse.x);
+                offset.y += (e.clientY - lastMouse.y);
+                lastMouse = { x: e.clientX, y: e.clientY };
+                drawTree();
+            }
+        };
+        canvas.onwheel = (e) => {
+            e.preventDefault();
+            const zoom = e.deltaY > 0 ? 0.9 : 1.1;
+            scale = Math.min(Math.max(0.1, scale * zoom), 3);
+            drawTree();
+        };
+
+        document.getElementById('zoomIn').onclick = () => { scale *= 1.2; drawTree(); };
+        document.getElementById('zoomOut').onclick = () => { scale *= 0.8; drawTree(); };
+        document.getElementById('resetView').onclick = () => {
+            scale = 0.5;
+            offset = { x: 50, y: 50 };
+            drawTree();
+        };
+
+        window.onresize = drawTree;
+        calculateLayout();
+        setTimeout(() => document.getElementById('resetView').click(), 50);
+
+    </script>
+</body>
+</html>
