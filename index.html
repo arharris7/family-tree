@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- user-scalable=no prevents browser native pinch-zoom fighting with canvas zoom -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Harris Family Tree Explorer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #f1f5f9; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }
-        canvas { cursor: grab; background-color: #ffffff; }
+        /* touch-action: none hands all touch events to JS, prevents page bounce on iOS */
+        canvas { cursor: grab; background-color: #ffffff; touch-action: none; }
         canvas:active { cursor: grabbing; }
         .controls { position: fixed; top: 20px; left: 20px; z-index: 10; display: flex; gap: 10px; }
     </style>
@@ -15,11 +17,12 @@
 <body class="h-screen flex flex-col">
 
     <div class="controls bg-white/90 backdrop-blur p-3 rounded-xl shadow-xl border border-slate-200">
-        <button id="zoomIn" class="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold">+</button>
-        <button id="zoomOut" class="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold">-</button>
-        <button id="resetView" class="px-4 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm font-medium">Reset View</button>
-        <div class="h-6 w-px bg-slate-300 mx-1"></div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-500 flex items-center font-bold">Drag to pan • Scroll to zoom</p>
+        <!-- Buttons bumped to w-11 h-11 (44px) for thumb-friendly tap targets on mobile -->
+        <button id="zoomIn" class="w-11 h-11 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold text-lg">+</button>
+        <button id="zoomOut" class="w-11 h-11 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold text-lg">−</button>
+        <button id="resetView" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm font-medium">Reset View</button>
+        <div class="h-6 w-px bg-slate-300 mx-1 hidden sm:block"></div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-500 items-center font-bold hidden sm:flex">Drag to pan • Scroll to zoom</p>
     </div>
 
     <div id="canvasContainer" class="flex-grow w-full h-full relative overflow-hidden">
@@ -202,18 +205,14 @@
                 if (placed.has(nodeId)) return;
                 const node = familyData.nodes.find(n => n.id === nodeId);
                 
-                // Find all partners for this person
                 const marriages = familyData.marriages.filter(m => m.partners.includes(nodeId));
                 
-                // If there are multiple partners, order them
-                // We want the primary person in the middle for remarriages
                 const others = [];
                 marriages.forEach(m => {
                     const partnerId = m.partners.find(id => id !== nodeId);
                     if (partnerId) others.push(partnerId);
                 });
 
-                // partnerList: [Spouse 1, Primary Person, Spouse 2, ...]
                 let partnerList = [];
                 if (others.length === 1) {
                     partnerList = [nodeId, others[0]];
@@ -239,11 +238,9 @@
                     const blockWidth = partnerList.length * nodeWidth + (partnerList.length - 1) * hGap;
                     let startX = childrenMid - (blockWidth / 2);
 
-                    // Overlap prevention with previous branches on same level
                     const minX = (levelCursor[node.level] || 0) + hGap;
                     if (startX < minX) {
                         const shift = minX - startX;
-                        // Shift children too
                         allChildren.forEach(c => shiftSubtree(c.id, shift));
                         startX = minX;
                     }
@@ -258,7 +255,6 @@
                         }
                     });
                 } else {
-                    // Leaf marriage block
                     let startX = (levelCursor[node.level] || 0) + hGap;
                     partnerList.forEach((pId, i) => {
                         const p = familyData.nodes.find(n => n.id === pId);
@@ -307,10 +303,8 @@
                 const pNodes = m.partners.map(id => familyData.nodes.find(n => n.id === id));
                 if (pNodes.length < 2) return;
 
-                // Sort partners by x-position to ensure line logic works
                 pNodes.sort((a, b) => a.x - b.x);
 
-                // Marriage line
                 ctx.strokeStyle = '#94a3b8';
                 ctx.setLineDash([5, 5]);
                 ctx.lineWidth = 2;
@@ -320,7 +314,6 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Children lines
                 const children = getChildren(m.partners);
                 if (children.length > 0) {
                     const midX = (pNodes[0].x + nodeWidth + pNodes[1].x) / 2;
@@ -348,13 +341,11 @@
             familyData.nodes.forEach(node => {
                 const isLiving = node.isLiving !== false;
                 
-                // Shadow
                 ctx.fillStyle = 'rgba(0,0,0,0.05)';
                 ctx.beginPath();
                 ctx.roundRect(node.x + 3, node.y + 3, nodeWidth, nodeHeight, 8);
                 ctx.fill();
 
-                // Box
                 ctx.fillStyle = isLiving ? '#ffffff' : '#f1f5f9';
                 ctx.strokeStyle = isLiving ? '#3b82f6' : '#94a3b8';
                 ctx.lineWidth = isLiving ? 2 : 1;
@@ -364,13 +355,11 @@
                 ctx.fill();
                 ctx.stroke();
 
-                // Name
                 ctx.textAlign = 'center';
                 ctx.fillStyle = '#0f172a';
                 ctx.font = 'bold 12px Inter, sans-serif';
                 ctx.fillText(node.name, node.x + nodeWidth/2, node.y + 35);
 
-                // Dates
                 ctx.fillStyle = '#64748b';
                 ctx.font = '500 10px Inter, sans-serif';
                 const dateStr = node.isLiving ? (node.dob ? `Born ${node.dob}` : 'Living') : `${node.dob || '?'} — ${node.dod || '?'}`;
@@ -380,11 +369,48 @@
             ctx.restore();
         }
 
-        // --- Interaction Logic ---
+        // --- View helpers ---
+
+        /**
+         * Centre the viewport on the Gen 1 couple (root_m + root_f).
+         * On mobile (< 768px wide) uses a lower scale so more context is visible.
+         * On desktop mirrors the original reset behaviour.
+         */
+        function resetToGen1() {
+            const isMobile = window.innerWidth < 768;
+            // Use a lower scale on mobile so more of the tree fits on screen
+            scale = isMobile ? 0.3 : 0.5;
+
+            const rootM = familyData.nodes.find(n => n.id === 'root_m');
+            const rootF = familyData.nodes.find(n => n.id === 'root_f');
+
+            if (rootM && rootF) {
+                // Midpoint of the Gen 1 couple in world coordinates
+                const gen1MidX = (rootM.x + rootF.x + nodeWidth) / 2;
+                const gen1Y = rootM.y;
+
+                // Translate so that midpoint lands at the horizontal centre of the screen,
+                // with a small top margin so the nodes aren't clipped
+                const topMargin = isMobile ? 80 : 60;
+                offset.x = (canvas.width / 2) - (gen1MidX * scale);
+                offset.y = topMargin - (gen1Y * scale);
+            } else {
+                // Fallback if nodes aren't found
+                offset = { x: 50, y: 50 };
+            }
+
+            drawTree();
+        }
+
+        // --- Mouse interaction ---
         let isDragging = false;
         let lastMouse = { x: 0, y: 0 };
-        canvas.onmousedown = (e) => { isDragging = true; lastMouse = { x: e.clientX, y: e.clientY }; };
-        window.onmouseup = () => isDragging = false;
+
+        canvas.onmousedown = (e) => {
+            isDragging = true;
+            lastMouse = { x: e.clientX, y: e.clientY };
+        };
+        window.onmouseup = () => { isDragging = false; };
         window.onmousemove = (e) => {
             if (isDragging) {
                 offset.x += (e.clientX - lastMouse.x);
@@ -400,17 +426,73 @@
             drawTree();
         };
 
-        document.getElementById('zoomIn').onclick = () => { scale *= 1.2; drawTree(); };
-        document.getElementById('zoomOut').onclick = () => { scale *= 0.8; drawTree(); };
-        document.getElementById('resetView').onclick = () => {
-            scale = 0.5;
-            offset = { x: 50, y: 50 };
-            drawTree();
+        // --- Touch interaction ---
+        // lastPinchDist tracks the distance between two fingers for pinch-to-zoom
+        let lastPinchDist = null;
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else {
+                // Two fingers — prepare for pinch, cancel any active pan
+                isDragging = false;
+                lastPinchDist = null;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1 && isDragging) {
+                // Single finger pan
+                offset.x += e.touches[0].clientX - lastMouse.x;
+                offset.y += e.touches[0].clientY - lastMouse.y;
+                lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                drawTree();
+            } else if (e.touches.length === 2) {
+                // Two finger pinch-to-zoom
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (lastPinchDist !== null) {
+                    const pinchScale = dist / lastPinchDist;
+                    scale = Math.min(Math.max(0.1, scale * pinchScale), 3);
+                    drawTree();
+                }
+                lastPinchDist = dist;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 0) {
+                // All fingers lifted
+                isDragging = false;
+                lastPinchDist = null;
+            } else if (e.touches.length === 1) {
+                // Lifted one finger during a pinch — resume single-finger pan tracking
+                lastPinchDist = null;
+                isDragging = true;
+                lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+        }, { passive: false });
+
+        // --- Button controls ---
+        document.getElementById('zoomIn').onclick = () => { scale = Math.min(scale * 1.2, 3); drawTree(); };
+        document.getElementById('zoomOut').onclick = () => { scale = Math.max(scale * 0.8, 0.1); drawTree(); };
+        document.getElementById('resetView').onclick = resetToGen1;
+
+        window.onresize = () => {
+            // Re-centre on resize so Gen 1 stays visible when rotating a phone
+            resetToGen1();
         };
 
-        window.onresize = drawTree;
+        // --- Init ---
         calculateLayout();
-        setTimeout(() => document.getElementById('resetView').click(), 50);
+        // Small delay to ensure canvas dimensions are fully set before first draw
+        setTimeout(resetToGen1, 50);
 
     </script>
 </body>
